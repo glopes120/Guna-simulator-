@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- Estilos Personalizados --- */
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: #111b21;
+  color: #e9edef;
+  overflow: hidden; /* Evita scroll na página toda */
+}
+
+/* Padrão de Fundo estilo WhatsApp */
+.wa-bg {
+  background-color: #0b141a;
+  background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png");
+  background-repeat: repeat;
+  background-blend-mode: overlay;
+  opacity: 0.9;
+}
+
+/* --- Scrollbar Personalizado (Estilo Dark Mode) --- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Esconder Scrollbar (para listas horizontais) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* --- Animações --- */
+
+/* Piscar (Blink) */
+@keyframes blink-anim {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.1); }
+}
+
+/* Flutuar (Idle) */
+@keyframes float-anim {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Tremer (Raiva/Medo) */
+@keyframes shake-anim {
+  0% { transform: translate(1px, 1px) rotate(0deg); }
+  10% { transform: translate(-1px, -2px) rotate(-1deg); }
+  20% { transform: translate(-3px, 0px) rotate(1deg); }
+  30% { transform: translate(3px, 2px) rotate(0deg); }
+  40% { transform: translate(1px, -1px) rotate(1deg); }
+  50% { transform: translate(-1px, 2px) rotate(-1deg); }
+  60% { transform: translate(-3px, 1px) rotate(0deg); }
+  70% { transform: translate(3px, 1px) rotate(-1deg); }
+  80% { transform: translate(-1px, -1px) rotate(1deg); }
+  90% { transform: translate(1px, 2px) rotate(0deg); }
+  100% { transform: translate(1px, -2px) rotate(-1deg); }
+}
+
+/* Flash de Preço (Negócio fechado/Mudança) */
+@keyframes price-flash {
+  0% { transform: scale(1); color: #e9edef; }
+  50% { transform: scale(1.1); color: #25d366; }
+  100% { transform: scale(1); color: #e9edef; }
+}
+
+/* Fade In (Entrada suave) */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Classes utilitárias para as animações */
+.animate-blink { animation: blink-anim 0.2s ease-in-out; }
+.animate-float { animation: float-anim 3s ease-in-out infinite; }
+.animate-shake { animation: shake-anim 0.5s infinite; }
+.animate-price { animation: price-flash 0.5s ease-out; }
+.animate-fade-in { animation: fade-in 0.4s ease-out forwards; }
