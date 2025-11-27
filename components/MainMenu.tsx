@@ -22,9 +22,12 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartNegotiation, onStartStory, o
           </div>
           <div className="text-center">
             <h1 className="text-3xl md:text-4xl font-bold text-[#e9edef] tracking-tight">
-              O Desafio do Guna
+              Guna Simulator
             </h1>
-            <p className="text-[#8696a0] mt-2 text-sm md:text-base">
+            <p className="text-[#00a884] font-medium mt-1 text-sm md:text-base uppercase tracking-wider border-b border-[#00a884] inline-block pb-1">
+              Business à Moda do Porto
+            </p>
+            <p className="text-[#8696a0] mt-3 text-xs md:text-sm">
               Consegues enganar o mestre do OLX?
             </p>
           </div>

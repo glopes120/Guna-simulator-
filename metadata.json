@@ -1,6 +1,6 @@
 {
-  "name": "O Desafio do Guna",
-  "description": "Um RPG textual onde tens de negociar um iPhone duvidoso com o Zézé da Areosa, o maior Guna do Porto.",
+  "name": "Guna Simulator",
+  "description": "Business à Moda do Porto. Tenta negociar com o Zézé sem ficar sem a carteira.",
   "requestFramePermissions": [
     "microphone"
   ]
