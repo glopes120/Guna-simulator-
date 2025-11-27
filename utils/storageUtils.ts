@@ -10,12 +10,14 @@ const DEFAULT_STATS: GameStatistics = {
   totalTurns: 0,
   bestDeal: null,
   lowestPriceSeen: 800,
+  recentResults: []
 };
 
 export const loadStats = (): GameStatistics => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return DEFAULT_STATS;
+    // Merge with default to ensure new fields (like recentResults) exist if loading old data
     return { ...DEFAULT_STATS, ...JSON.parse(stored) };
   } catch (e) {
     console.error("Failed to load stats", e);

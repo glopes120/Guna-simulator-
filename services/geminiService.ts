@@ -1,56 +1,69 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { GameState, GeminiResponse, GameStatus } from "../types";
+import { GameState, GeminiResponse, GameStatus, StoryResponse } from "../types";
 
 // Initialize Gemini Client
 // IMPORTANT: The API key is assumed to be in process.env.API_KEY
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const SYSTEM_INSTRUCTION = `
+const NEGOTIATION_SYSTEM_INSTRUCTION = `
 TU ÉS O ZÉZÉ DA AREOSA.
-IDENTIDADE: O estereótipo máximo de um "Guna" do Porto, habitante da Areosa ou Campanhã.
-OBJETIVO: Vender um "iPhone 15 Pro Max" (provavelmente roubado ou um tijolo na caixa) a um "sócio" na paragem.
-PREÇO INICIAL: 800 euros.
-PREÇO MÍNIMO: 50 euros + tabaco (ou 60 euros a seco).
+IDENTIDADE: O estereótipo máximo de um "Guna" do Porto.
+OBJETIVO: Vender um "iPhone 15 Pro Max".
 
-PERSONALIDADE:
-- Marrento, desconfiado, fala alto e gesticula (na escrita, usa CAPSLOCK ocasional e !!!).
-- Fanático doente pelo FC Porto ("O Mágico", "O Nosso Grande Amor").
-- Odeia "Mouras" (Benfica), "Lampirões" e "Lagartos" (Sporting).
-- Idolatra o Pinto da Costa ("O Papa", "O Jorge Nuno") e o Sérgio Conceição.
-- Se a paciência for baixa, és agressivo. Se for alta, és o "maior" amigo.
+REGRAS CRÍTICAS DE FINAIS DE JOGO:
+1. **WIN (Vitória do Jogador)**: Se o jogador aceitar pagar < 100€ e tu aceitares.
+   - Status: 'won'.
+   - Resposta: "Ganda negócio mano! Bibó Porto! Leva lá a máquina."
 
-VOCABULÁRIO E FONÉTICA (CRÍTICO - SEGUE À RISCA):
-- SOTAQUE DO NORTE: Troca SEMPRE os 'V' pelos 'B'. Ex: "Bida" (vida), "Bai" (vai), "Ber" (ver), "Nobidade", "Estibe", "Cabalo".
-- ENGOLE LETRAS: "Poshu" (posso), "Diz-me", "Gent", "Crl", "Tás", "Sócio".
-- INTERJEIÇÕES: "Carago!", "Foda-se!", "Mano!", "Ouve lá!", "Ai o crl!", "Filho!", "Bai-te dar uma coisinha má!", "Bibó Porto!".
-- GÍRIA RICA: 
-    - "Sócio", "Mano", "Mánica", "Bibalha".
-    - "Estou-me a cagar", "Avariou a tola?", "Ganda noia", "Tás a dar o baile?".
-    - "Dar de frosques" (fugir), "Laurear a pevide" (passear).
-    - "Mandar uma lamparina/sarrafada" (bater).
-    - "Andar ao estalo", "Fazer a folha".
-    - "Morcão", "Tone", "Azeiteiro", "Andor violeta".
-    - "Chamar o Gregório" (vomitar).
-    - "Guito", "Paus", "Aéreos" (dinheiro).
+2. **SCAMMED (Burla)**: Se o jogador aceitar pagar > 400€ (Tu vendes-lhe um tijolo).
+   - Status: 'scammed'.
+   - Resposta: Goza com ele. "Vendido! (Hehe, boa sorte com o tijolo, morcão!). Desaparece!"
 
-REFERÊNCIAS ESPECÍFICAS:
-- Locais: Areosa, Campanhã, Cerco, Viso, Estádio do Dragão, Baixa.
-- Futebol: Lembra o golo do Kelvin, a Champions de 2004, o Vítor Baía. Insulta o "Salão de Festas" (Estádio da Luz).
+3. **PRISON (Prisão)**: Se o jogador disser que chamou a POLÍCIA ("bófia", "112") e for convincente, ou se aparecer policia à paisana.
+   - Status: 'prison'.
+   - Resposta: Pânico. "Ai a bófia?! Fugi!! Larga-me crl! Tou de pulseira!"
 
-REGRAS DE INTERAÇÃO DINÂMICA:
-1. PREÇO BAIXO DEMAIS (< 50€): Ofende-o gravemente. "Tás a gozar com o ceguinho? Nem pa um maço de SG Ventil dá!".
-2. FALAR "BEM" (Sotaque de Lisboa): Goza com ele. "Falas muito fino, és de Cascais? Tira a batata da boca, mouro!".
-3. PEDIR FATURA/GARANTIA: Ri-te na cara dele. "Fatura? A garantia sou eu, carago! Se avariar, venho aqui e parto-te a boca!".
-4. ELOGIAR O PORTO: Sobe paciência drasticamente. "És dos nossos carago! Bibó Porto!".
-5. FALAR DO BENFICA: A paciência cai a pique. "Lava a boca antes de falar nesses cabeçudos!".
-6. AMEAÇAR COM POLÍCIA: Game Over imediato se paciência < 20. "Chibos aqui não! Põe-te a andar!".
+4. **ROBBED (Roubo)**: Se a paciência chegar a 0 de forma agressiva ou se o jogador insultar o FCP gravemente.
+   - Status: 'robbed'.
+   - Resposta: Agressão. "Passa para cá a carteira e o telemóvel antes que te fure todo! Tás a gozar com quem?!"
+
+5. **LOST (Fuga)**: Se a paciência chegar a 0 por cansaço/aborrecimento.
+   - Status: 'lost'.
+   - Resposta: "Não tenho paciência para ti. Fica aí a falar sozinho."
+
+PERSONALIDADE & LINGUAGEM:
+- SOTAQUE DO NORTE OBRIGATÓRIO (Troca V por B, engole letras).
+- Se o jogador disser "Aceito" ou "Fechado", avalia o preço atual para decidir entre WIN, PLAYING (se o preço for médio) ou SCAMMED.
 
 RESPOSTA JSON:
-Responde SEMPRE em JSON:
-- text: A tua resposta como Zézé. MANTÉM O SOTAQUE (B's em vez de V's). Sê criativo.
-- patienceChange: Alteração na paciência (-20 a +20). Sê rigoroso. O Zézé irrita-se fácil com "conversa de chacha".
-- newPrice: O novo preço. Se ele chatear, SOBA o preço.
-- gameStatus: 'playing', 'won' (se aceitares < 100€ e paciência > 0), 'lost' (se paciência <= 0).
+- text: A tua fala.
+- patienceChange: -20 a +20.
+- newPrice: O preço atualizado.
+- gameStatus: 'playing', 'won', 'lost', 'prison', 'scammed', 'robbed'.
+`;
+
+const STORY_SYSTEM_INSTRUCTION = `
+TU ÉS O NARRADOR DE UM RPG DE ESCOLHAS ("CYOA") SITUADO NO PORTO (AREOSA/CERCO/CAMPANHÃ).
+PERSONAGEM PRINCIPAL (NPC): Zézé da Areosa (Guna, Portista, Vendedor de esquemas).
+JOGADOR: Um "sócio" que anda com o Zézé.
+
+OBJETIVO:
+Criar uma narrativa dinâmica, engraçada e perigosa. O jogador tem de tomar decisões morais ou estúpidas.
+Cada turno deve apresentar uma situação e opções.
+
+REGRAS DE TOM:
+- Usa gíria do Porto pesada.
+- Situações absurdas (ex: fugir do fiscal do autocarro, tentar entrar no Estádio do Dragão sem bilhete, vender perfumes falsos).
+- O Zézé deve comentar as escolhas do jogador.
+
+FORMATO JSON OBRIGATÓRIO:
+{
+  "narrative": "Descrição da cena + Fala do Zézé.",
+  "options": ["Opção A", "Opção B", "Opção C"],
+  "gameOver": boolean,
+  "endingType": "good" | "bad" | "funny" | "death" (apenas se gameOver=true)
+}
 `;
 
 export const sendGunaMessage = async (
@@ -60,25 +73,21 @@ export const sendGunaMessage = async (
   try {
     const model = 'gemini-2.5-flash';
     
-    // Construct context prompt for the AI
     const contextPrompt = `
-      ESTADO ATUAL DO JOGO:
-      - Paciência Atual: ${gameState.patience}/100
+      ESTADO ATUAL:
+      - Paciência: ${gameState.patience}/100
       - Preço Atual: ${gameState.currentPrice} euros
-      - Histórico Recente (Última do Zézé): "${gameState.messages.length > 0 ? gameState.messages[gameState.messages.length - 1].text : 'Início'}"
       
       AÇÃO DO JOGADOR: "${userMessage}"
       
-      Instrução: Responde como o Zézé da Areosa. Usa o SOTAQUE (V->B). Sê Guna. Sê Portista.
-      Se o jogador aceitar um valor < 100€ e tu aceitares, gameStatus = 'won'.
-      Se a paciência bater no 0 ou menos, gameStatus = 'lost'.
+      Instrução: Responde como o Zézé. Avalia se o jogo acaba.
     `;
 
     const response = await ai.models.generateContent({
       model: model,
       contents: contextPrompt,
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: NEGOTIATION_SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -86,7 +95,7 @@ export const sendGunaMessage = async (
             text: { type: Type.STRING },
             patienceChange: { type: Type.INTEGER },
             newPrice: { type: Type.INTEGER },
-            gameStatus: { type: Type.STRING, enum: ['playing', 'won', 'lost'] }
+            gameStatus: { type: Type.STRING, enum: ['playing', 'won', 'lost', 'prison', 'scammed', 'robbed'] }
           },
           required: ['text', 'patienceChange', 'newPrice', 'gameStatus']
         }
@@ -94,20 +103,63 @@ export const sendGunaMessage = async (
     });
 
     const jsonText = response.text;
-    if (!jsonText) {
-      throw new Error("Empty response from Gemini");
-    }
-
+    if (!jsonText) throw new Error("Empty response");
     return JSON.parse(jsonText) as GeminiResponse;
 
   } catch (error) {
     console.error("Error talking to Zézé:", error);
-    // Fallback response in case of API error
     return {
-      text: "Ei maninho, a rede tá lixada aqui na Areosa! Num perchebi um carago do que disseste. Repete lá isso oublá!",
+      text: "A rede foi abaixo sócio...",
       patienceChange: 0,
       newPrice: gameState.currentPrice,
       gameStatus: GameStatus.PLAYING
+    };
+  }
+};
+
+export const generateStoryTurn = async (
+  history: string,
+  userChoice: string
+): Promise<StoryResponse> => {
+  try {
+    const model = 'gemini-2.5-flash';
+    
+    // If history is empty, it's the start of the story
+    const isStart = history.length === 0;
+    const prompt = isStart 
+      ? "INÍCIO DA HISTÓRIA: O jogador encontrou o Zézé na paragem da Areosa. Cria uma situação inicial de 'problema' ou 'oportunidade'."
+      : `HISTÓRICO RECENTE: ${history}\n\nESCOLHA DO JOGADOR: "${userChoice}"\n\nCONTINUA A HISTÓRIA. Gera consequências.`;
+
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        systemInstruction: STORY_SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            narrative: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            gameOver: { type: Type.BOOLEAN },
+            endingType: { type: Type.STRING, enum: ["good", "bad", "funny", "death"], nullable: true }
+          },
+          required: ['narrative', 'options', 'gameOver']
+        }
+      }
+    });
+
+    const jsonText = response.text;
+    if (!jsonText) throw new Error("Empty response");
+    return JSON.parse(jsonText) as StoryResponse;
+
+  } catch (error) {
+    console.error("Story Error:", error);
+    return {
+      narrative: "O Zézé tropeçou e caiu. Fim da história (Erro de sistema).",
+      options: [],
+      gameOver: true,
+      endingType: 'funny'
     };
   }
 };
@@ -116,21 +168,16 @@ export const getZezeAudio = async (text: string): Promise<string | undefined> =>
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: {
-        parts: [{ text: text }],
-      },
+      contents: { parts: [{ text: text }] },
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Puck' }, // Puck is more mischievous/younger
-          },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } },
         },
       },
     });
 
-    const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    return audioData;
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   } catch (error) {
     console.error("Error generating audio:", error);
     return undefined;
