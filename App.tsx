@@ -1,12 +1,12 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { sendGunaMessage, getZezeAudio, generateStoryTurn } from './services/geminiService';
-import { GameState, GameStatus, Message, GameStatistics, GameResult, GameMode } from './types';
+import { sendGunaMessage, getZezeAudio, generateStoryTurn, generateZezeImage, generateVeoVideo, getEndingImagePrompt } from './services/geminiService';
+import { GameState, GameStatus, Message, GameStatistics, GameResult, GameMode, ImageSize } from './types';
 import ChatMessage from './components/ChatMessage';
 import PatienceMeter from './components/PatienceMeter';
 import ZezeAvatar from './components/ZezeAvatar';
 import StatsModal from './components/StatsModal';
 import StoryControls from './components/StoryControls';
+import MainMenu from './components/MainMenu';
 import { playAudioData } from './utils/audioUtils';
 import { loadStats, saveStats, clearStats } from './utils/storageUtils';
 
@@ -71,18 +71,17 @@ const OPENING_LINES = [
   "Boas chefe! Tás com cara de quem precisa de um upgrade e curte do FCP! Tenho aqui o bicho! iPhone 15 Pro Max. Ainda cheira a novo! Só 800 paus para ti.",
 ];
 
-const RESTART_LINES = [
-  "Ei sócio! Tás de volta? Bora lá ver se tens guito hoje ou se vens só encher chouriços. 800 paus pelo iPhone!",
-  "Olha quem é ele! Oube lá, bais comprar o telemóvel ou bais continuar a dar baile? 800 euros, preço de amigo!",
-];
-
 const getRandomLine = (lines: string[]) => lines[Math.floor(Math.random() * lines.length)];
 
 export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Screen State: 'menu' | 'game'
+  const [inMainMenu, setInMainMenu] = useState(true);
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -92,6 +91,7 @@ export default function App() {
   const [showStats, setShowStats] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   
   const [stats, setStats] = useState<GameStatistics>(loadStats);
 
@@ -109,16 +109,51 @@ export default function App() {
       }
     ],
     storyOptions: [],
-    isStoryLoading: false
+    isStoryLoading: false,
+    imageSize: '1K'
   }));
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [gameState.messages, isLoading, gameState.storyOptions]);
+  }, [gameState.messages, isLoading, gameState.storyOptions, isGeneratingVideo]);
 
-  // Audio & Speech Logic (Same as before)
+  // Handle Game Endings - Trigger Image Generation
+  useEffect(() => {
+      const generateEndingVisual = async () => {
+          if (gameState.status !== GameStatus.PLAYING && gameState.mode === 'negotiation') {
+              const prompt = getEndingImagePrompt(gameState.status);
+              if (prompt) {
+                  const msgId = `ending-${Date.now()}`;
+                  // Add placeholder message for image
+                  setGameState(prev => ({
+                      ...prev,
+                      messages: [...prev.messages, { id: msgId, sender: 'system', text: "A gerar final..." }]
+                  }));
+                  
+                  try {
+                      const imageUrl = await generateZezeImage(prompt, gameState.imageSize);
+                      if (imageUrl) {
+                          setGameState(prev => ({
+                              ...prev,
+                              messages: prev.messages.map(m => 
+                                  m.id === msgId ? { ...m, text: "FIM DE JOGO", imageUrl } : m
+                              )
+                          }));
+                      }
+                  } catch (e) {
+                      console.error("Ending image failed", e);
+                  }
+              }
+          }
+      };
+      
+      generateEndingVisual();
+  }, [gameState.status, gameState.mode, gameState.imageSize]);
+
+
+  // Audio & Speech Logic
   const initAudio = () => {
     if (!audioContextRef.current) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -176,6 +211,24 @@ export default function App() {
     }
   };
 
+  // Helper to process optional images in background
+  const processImagePrompt = async (messageId: string, imagePrompt: string | undefined, currentSize: ImageSize) => {
+    if (!imagePrompt) return;
+    
+    // Slight delay to simulate generation
+    try {
+      const imageUrl = await generateZezeImage(imagePrompt, currentSize);
+      if (imageUrl) {
+        setGameState(prev => ({
+          ...prev,
+          messages: prev.messages.map(m => m.id === messageId ? { ...m, imageUrl } : m)
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to generate image", e);
+    }
+  };
+
   // ----- NEGOTIATION LOGIC -----
   const handleNegotiationMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -193,7 +246,8 @@ export default function App() {
       const response = await sendGunaMessage(gameState, text);
       const newPatience = Math.max(0, Math.min(100, gameState.patience + response.patienceChange));
       
-      const zezeMsg: Message = { id: (Date.now() + 1).toString(), sender: 'zeze', text: response.text };
+      const zezeMsgId = (Date.now() + 1).toString();
+      const zezeMsg: Message = { id: zezeMsgId, sender: 'zeze', text: response.text };
 
       setGameState(prev => ({
         ...prev,
@@ -204,9 +258,35 @@ export default function App() {
         messages: [...prev.messages, zezeMsg]
       }));
 
+      // Trigger background image generation if prompted
+      processImagePrompt(zezeMsgId, response.imagePrompt, gameState.imageSize);
+
       // Stats Logic (Simplified for brevity)
       if (response.gameStatus !== GameStatus.PLAYING) {
          // Update stats logic here...
+         const result: GameResult = {
+             outcome: response.gameStatus as any,
+             finalPrice: response.newPrice,
+             timestamp: Date.now()
+         };
+         const newStats = { ...stats };
+         newStats.gamesPlayed++;
+         newStats.totalTurns += gameState.turnCount + 1;
+         newStats.recentResults = [result, ...newStats.recentResults].slice(0, 5);
+         
+         if (response.gameStatus === GameStatus.WON) {
+             newStats.wins++;
+             if (!newStats.bestDeal || response.newPrice < newStats.bestDeal) {
+                 newStats.bestDeal = response.newPrice;
+             }
+         } else {
+             newStats.losses++;
+         }
+         
+         if (response.newPrice < newStats.lowestPriceSeen) newStats.lowestPriceSeen = response.newPrice;
+         
+         setStats(newStats);
+         saveStats(newStats);
       }
 
       if (isAudioEnabled) {
@@ -222,9 +302,56 @@ export default function App() {
     }
   };
 
+  // ----- VEO VIDEO LOGIC -----
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset input
+    event.target.value = '';
+
+    setIsGeneratingVideo(true);
+    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: "Enviou um vídeo (A processar...)" };
+    setGameState(prev => ({ ...prev, messages: [...prev.messages, userMsg] }));
+
+    try {
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64String = (reader.result as string).split(',')[1];
+            const mimeType = file.type;
+
+            const videoUrl = await generateVeoVideo(base64String, mimeType);
+            
+            if (videoUrl) {
+                setGameState(prev => ({
+                    ...prev,
+                    messages: prev.messages.map(m => 
+                        m.id === userMsg.id ? { ...m, text: "Olha para esta cena!", videoUrl } : m
+                    )
+                }));
+            } else {
+                 setGameState(prev => ({
+                    ...prev,
+                    messages: prev.messages.map(m => 
+                        m.id === userMsg.id ? { ...m, text: "O vídeo falhou... a net tá lenta." } : m
+                    )
+                }));
+            }
+            setIsGeneratingVideo(false);
+        };
+        reader.readAsDataURL(file);
+    } catch (e) {
+        console.error("Video upload failed", e);
+        setIsGeneratingVideo(false);
+    }
+  };
+
   // ----- STORY MODE LOGIC -----
   const startStoryMode = async () => {
-    setGameState({
+    setInMainMenu(false);
+    setGameState(prev => ({
+      ...prev,
       mode: 'story',
       patience: 100, // Not relevant in story
       currentPrice: 0,
@@ -233,18 +360,23 @@ export default function App() {
       messages: [],
       storyOptions: [],
       isStoryLoading: true
-    });
+    }));
     setShowMenu(false);
 
     try {
       const storyTurn = await generateStoryTurn("", "");
-      const msg: Message = { id: Date.now().toString(), sender: 'zeze', text: storyTurn.narrative };
+      const msgId = Date.now().toString();
+      const msg: Message = { id: msgId, sender: 'zeze', text: storyTurn.narrative };
+      
       setGameState(prev => ({
         ...prev,
         messages: [msg],
         storyOptions: storyTurn.options,
         isStoryLoading: false
       }));
+
+      processImagePrompt(msgId, storyTurn.imagePrompt, gameState.imageSize);
+
     } catch (e) {
       console.error(e);
       setGameState(prev => ({ ...prev, isStoryLoading: false }));
@@ -264,7 +396,8 @@ export default function App() {
 
     try {
         const storyTurn = await generateStoryTurn(history, choice);
-        const msg: Message = { id: (Date.now() + 1).toString(), sender: 'zeze', text: storyTurn.narrative };
+        const msgId = (Date.now() + 1).toString();
+        const msg: Message = { id: msgId, sender: 'zeze', text: storyTurn.narrative };
         
         // Handle Game Over in Story
         const newStatus = storyTurn.gameOver ? GameStatus.WON : GameStatus.PLAYING; 
@@ -277,6 +410,8 @@ export default function App() {
             isStoryLoading: false
         }));
 
+        processImagePrompt(msgId, storyTurn.imagePrompt, gameState.imageSize);
+
         if (isAudioEnabled) {
              getZezeAudio(storyTurn.narrative).then(audio => {
                if(audio && audioContextRef.current) playAudioData(audio, audioContextRef.current, 1.2);
@@ -288,7 +423,9 @@ export default function App() {
     }
   };
 
-  const restartNegotiation = () => {
+  const startNegotiationGame = () => {
+    setInMainMenu(false);
+    // Reset state for new negotiation
     setGameState({
       mode: 'negotiation',
       patience: 50,
@@ -297,10 +434,25 @@ export default function App() {
       turnCount: 0,
       messages: [{ id: Date.now().toString(), sender: 'zeze', text: getRandomLine(OPENING_LINES) }],
       storyOptions: [],
-      isStoryLoading: false
+      isStoryLoading: false,
+      imageSize: gameState.imageSize // Keep setting
     });
     setShowMenu(false);
   };
+
+  const handleBackToMenu = () => {
+      setInMainMenu(true);
+      setShowMenu(false);
+  };
+
+  const restartNegotiation = () => {
+    startNegotiationGame();
+  };
+
+  const handleImageSizeChange = (size: ImageSize) => {
+    setGameState(prev => ({ ...prev, imageSize: size }));
+    setShowMenu(false);
+  }
 
   const handleMainButtonClick = () => {
     if (gameState.mode === 'negotiation') {
@@ -317,119 +469,163 @@ export default function App() {
 
       <div className="w-full max-w-[500px] h-full md:h-[90vh] md:max-h-[850px] bg-[#0b141a] md:rounded-[24px] shadow-2xl flex flex-col overflow-hidden relative">
         
-        {/* Dropdown Menu */}
-        {showMenu && (
-             <div className="absolute top-14 right-4 bg-[#202c33] rounded-xl shadow-xl z-50 border border-[#2a3942] py-2 min-w-[200px] animate-fade-in">
-                 <button onClick={restartNegotiation} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
-                     <span className="text-xl">💰</span> Negociação
-                 </button>
-                 <button onClick={startStoryMode} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
-                     <span className="text-xl">📖</span> Modo História
-                 </button>
-                 <div className="border-t border-[#2a3942] my-1"></div>
-                 <button onClick={() => setShowStats(true)} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
-                     <span className="text-xl">📊</span> Caderneta
-                 </button>
-             </div>
-        )}
-
-        {/* Header */}
-        <div className="px-2 py-2 bg-[#202c33] flex justify-between items-center z-20 shrink-0 shadow-sm">
-          <div className="flex items-center gap-2 flex-1 cursor-pointer hover:bg-[#2a3942] p-1 rounded-lg transition-colors" onClick={() => setShowMenu(!showMenu)}>
-             <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-600 bg-black">
-               <ZezeAvatar patience={gameState.mode === 'story' ? 100 : gameState.patience} isThinking={isLoading || gameState.isStoryLoading} />
-             </div>
-             <div className="flex flex-col justify-center">
-               <div className="text-[#e9edef] font-medium text-[16px] leading-tight">
-                 Zézé da Areosa {gameState.mode === 'story' && <span className="text-[#00a884] text-xs font-bold bg-[#0b141a] px-1 rounded ml-1">RPG</span>}
-               </div>
-               <div className="text-[#8696a0] text-[12px] truncate max-w-[150px]">
-                 {isLoading || gameState.isStoryLoading ? "a escrever..." : "Online"}
-               </div>
-             </div>
-          </div>
-          <div className="flex items-center gap-4 px-2">
-             <button onClick={toggleAudio} className={isAudioEnabled ? "opacity-100" : "opacity-50"}><VideoIcon /></button>
-             <button onClick={() => setShowMenu(!showMenu)}><MenuIcon /></button>
-          </div>
-        </div>
-
-        {/* Negotiation Info Bar (Only Negotiation Mode) */}
-        {gameState.mode === 'negotiation' && (
-            <div className="bg-[#182229] px-4 py-1 flex justify-center border-b border-[#202c33] z-10">
-            <span className={`text-xs font-bold text-[#8696a0] uppercase flex items-center gap-2 ${isPriceAnimating ? 'animate-price' : ''}`}>
-                iPhone 15 "Pro Max" • <span className="text-[#e9edef]">{gameState.currentPrice} €</span>
-            </span>
-            </div>
-        )}
-
-        {/* Chat Area */}
-        <div className="relative flex-1 bg-[#0b141a] overflow-hidden w-full">
-            <div className="absolute inset-0 wa-bg pointer-events-none"></div>
-            <div ref={scrollRef} className="relative h-full overflow-y-auto p-4 space-y-1">
-              {gameState.mode === 'negotiation' && <PatienceMeter level={gameState.patience} />}
-              {gameState.messages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
-              ))}
-              
-              {/* Negotiation End Cards */}
-              {gameState.mode === 'negotiation' && gameState.status !== GameStatus.PLAYING && (
-                  <div className="flex justify-center mt-4">
-                      <button onClick={restartNegotiation} className="bg-[#202c33] text-[#00a884] px-6 py-2 rounded-full border border-[#2a3942] hover:bg-[#2a3942] font-bold">
-                          JOGAR NOVAMENTE
-                      </button>
-                  </div>
-              )}
-              
-              <div className="h-4"></div>
-            </div>
-        </div>
-
-        {/* Input Area Switcher */}
-        {gameState.mode === 'story' ? (
-            <StoryControls 
-                options={gameState.storyOptions} 
-                onChoose={handleStoryChoice} 
-                isLoading={gameState.isStoryLoading} 
-                gameOver={gameState.status !== GameStatus.PLAYING}
-                onRestart={startStoryMode}
-            />
+        {/* MAIN MENU RENDER */}
+        {inMainMenu ? (
+          <MainMenu 
+            onStartNegotiation={startNegotiationGame} 
+            onStartStory={startStoryMode} 
+            onOpenStats={() => setShowStats(true)} 
+          />
         ) : (
-            <div className="bg-[#202c33] p-2 flex items-end gap-2 shrink-0 z-20 relative">
-                {speechError && (
-                    <div className="absolute -top-12 right-2 bg-red-600/95 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-bounce z-50">
-                        {speechError}
-                    </div>
-                )}
-                <div className="flex-1 bg-[#2a3942] rounded-[24px] px-3 py-2 flex items-center gap-2 min-h-[42px]">
-                    <button className="p-1 hover:bg-[#374248] rounded-full transition-colors hidden md:block"><SmileyIcon /></button>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleMainButtonClick()}
-                        disabled={gameState.status !== GameStatus.PLAYING || isLoading}
-                        placeholder={isListening ? "A ouvir..." : (gameState.status === GameStatus.PLAYING ? "Mensagem" : "Bloqueado")}
-                        className={`bg-transparent text-[#e9edef] placeholder-[#8696a0] text-[15px] flex-1 outline-none w-full ${isListening ? 'animate-pulse' : ''}`}
-                    />
-                    <button className="p-1 hover:bg-[#374248] rounded-full transition-colors rotate-45"><ClipIcon /></button>
-                </div>
-                
-                {gameState.status === GameStatus.PLAYING && input.length === 0 && !isListening && (
-                    <button onClick={() => handleNegotiationMessage(`ACEITO O NEGÓCIO POR ${gameState.currentPrice} EUROS!`)} className="w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-md bg-[#202c33] hover:bg-[#374248] border border-[#2a3942] flex-shrink-0">
-                        <HandshakeIcon />
+          /* GAME INTERFACE RENDER */
+          <>
+            {/* Dropdown Menu */}
+            {showMenu && (
+                <div className="absolute top-14 right-4 bg-[#202c33] rounded-xl shadow-xl z-50 border border-[#2a3942] py-2 min-w-[200px] animate-fade-in">
+                    <button onClick={handleBackToMenu} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
+                        <span className="text-xl">🏠</span> Menu Principal
                     </button>
-                )}
+                    <button onClick={restartNegotiation} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
+                        <span className="text-xl">🔄</span> Reiniciar Jogo
+                    </button>
+                    <div className="border-t border-[#2a3942] my-1"></div>
+                    <div className="px-4 py-2 text-xs text-[#8696a0] font-bold uppercase">Qualidade Imagem</div>
+                    <div className="flex px-4 gap-2 mb-2">
+                        {(['1K', '2K', '4K'] as ImageSize[]).map((size) => (
+                          <button 
+                            key={size}
+                            onClick={() => handleImageSizeChange(size)}
+                            className={`flex-1 py-1 rounded text-xs font-bold border ${gameState.imageSize === size ? 'bg-[#00a884] text-white border-[#00a884]' : 'text-[#8696a0] border-[#8696a0]'}`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                    </div>
+                    <div className="border-t border-[#2a3942] my-1"></div>
+                    <button onClick={() => setShowStats(true)} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
+                        <span className="text-xl">📊</span> Caderneta
+                    </button>
+                </div>
+            )}
 
-                <button 
-                    onClick={handleMainButtonClick}
-                    disabled={isLoading || gameState.status !== GameStatus.PLAYING}
-                    className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-md transition-all flex-shrink-0 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#00a884] hover:bg-[#008f6f]'}`}
-                >
-                    {isListening ? <MicIcon /> : (input.trim() ? <SendIcon /> : <MicIcon />)}
+            {/* Header */}
+            <div className="px-2 py-2 bg-[#202c33] flex justify-between items-center z-20 shrink-0 shadow-sm">
+              <div className="flex items-center gap-2">
+                <button onClick={handleBackToMenu} className="p-1 hover:bg-[#2a3942] rounded-full transition-colors mr-1">
+                    <BackArrowIcon />
                 </button>
+                <div className="flex items-center gap-2 cursor-pointer hover:bg-[#2a3942] p-1 rounded-lg transition-colors" onClick={() => setShowMenu(!showMenu)}>
+                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-600 bg-black">
+                    <ZezeAvatar patience={gameState.mode === 'story' ? 100 : gameState.patience} isThinking={isLoading || gameState.isStoryLoading} />
+                  </div>
+                  <div className="flex flex-col justify-center">
+                    <div className="text-[#e9edef] font-medium text-[16px] leading-tight">
+                      Zézé da Areosa {gameState.mode === 'story' && <span className="text-[#00a884] text-xs font-bold bg-[#0b141a] px-1 rounded ml-1">RPG</span>}
+                    </div>
+                    <div className="text-[#8696a0] text-[12px] truncate max-w-[150px]">
+                      {isLoading || gameState.isStoryLoading ? "a escrever..." : (isGeneratingVideo ? "a ver vídeo..." : "Online")}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 px-2">
+                <button onClick={toggleAudio} className={isAudioEnabled ? "opacity-100" : "opacity-50"}><VideoIcon /></button>
+                <button onClick={() => setShowMenu(!showMenu)}><MenuIcon /></button>
+              </div>
             </div>
+
+            {/* Negotiation Info Bar (Only Negotiation Mode) */}
+            {gameState.mode === 'negotiation' && (
+                <div className="bg-[#182229] px-4 py-1 flex justify-center border-b border-[#202c33] z-10">
+                <span className={`text-xs font-bold text-[#8696a0] uppercase flex items-center gap-2 ${isPriceAnimating ? 'animate-price' : ''}`}>
+                    iPhone 15 "Pro Max" • <span className="text-[#e9edef]">{gameState.currentPrice} €</span>
+                </span>
+                </div>
+            )}
+
+            {/* Chat Area */}
+            <div className="relative flex-1 bg-[#0b141a] overflow-hidden w-full">
+                <div className="absolute inset-0 wa-bg pointer-events-none"></div>
+                <div ref={scrollRef} className="relative h-full overflow-y-auto p-4 space-y-1">
+                  {gameState.mode === 'negotiation' && <PatienceMeter level={gameState.patience} />}
+                  {gameState.messages.map((msg) => (
+                    <ChatMessage key={msg.id} message={msg} />
+                  ))}
+                  
+                  {/* Negotiation End Cards */}
+                  {gameState.mode === 'negotiation' && gameState.status !== GameStatus.PLAYING && (
+                      <div className="flex justify-center mt-4">
+                          <button onClick={restartNegotiation} className="bg-[#202c33] text-[#00a884] px-6 py-2 rounded-full border border-[#2a3942] hover:bg-[#2a3942] font-bold">
+                              JOGAR NOVAMENTE
+                          </button>
+                      </div>
+                  )}
+                  
+                  <div className="h-4"></div>
+                </div>
+            </div>
+
+            {/* Input Area Switcher */}
+            {gameState.mode === 'story' ? (
+                <StoryControls 
+                    options={gameState.storyOptions} 
+                    onChoose={handleStoryChoice} 
+                    isLoading={gameState.isStoryLoading} 
+                    gameOver={gameState.status !== GameStatus.PLAYING}
+                    onRestart={startStoryMode}
+                />
+            ) : (
+                <div className="bg-[#202c33] p-2 flex items-end gap-2 shrink-0 z-20 relative">
+                    {speechError && (
+                        <div className="absolute -top-12 right-2 bg-red-600/95 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-bounce z-50">
+                            {speechError}
+                        </div>
+                    )}
+                    <div className="flex-1 bg-[#2a3942] rounded-[24px] px-3 py-2 flex items-center gap-2 min-h-[42px]">
+                        <button className="p-1 hover:bg-[#374248] rounded-full transition-colors hidden md:block"><SmileyIcon /></button>
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleMainButtonClick()}
+                            disabled={gameState.status !== GameStatus.PLAYING || isLoading}
+                            placeholder={isListening ? "A ouvir..." : (gameState.status === GameStatus.PLAYING ? "Mensagem" : "Bloqueado")}
+                            className={`bg-transparent text-[#e9edef] placeholder-[#8696a0] text-[15px] flex-1 outline-none w-full ${isListening ? 'animate-pulse' : ''}`}
+                        />
+                        {/* Hidden File Input for Video Generation */}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          ref={fileInputRef} 
+                          className="hidden" 
+                          onChange={handleFileUpload}
+                        />
+                        <button 
+                          onClick={() => fileInputRef.current?.click()} 
+                          className={`p-1 hover:bg-[#374248] rounded-full transition-colors rotate-45 ${isGeneratingVideo ? 'animate-spin' : ''}`}
+                          disabled={isGeneratingVideo}
+                        >
+                          <ClipIcon />
+                        </button>
+                    </div>
+                    
+                    {gameState.status === GameStatus.PLAYING && input.length === 0 && !isListening && (
+                        <button onClick={() => handleNegotiationMessage(`ACEITO O NEGÓCIO POR ${gameState.currentPrice} EUROS!`)} className="w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-md bg-[#202c33] hover:bg-[#374248] border border-[#2a3942] flex-shrink-0">
+                            <HandshakeIcon />
+                        </button>
+                    )}
+
+                    <button 
+                        onClick={handleMainButtonClick}
+                        disabled={isLoading || gameState.status !== GameStatus.PLAYING}
+                        className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-md transition-all flex-shrink-0 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#00a884] hover:bg-[#008f6f]'}`}
+                    >
+                        {isListening ? <MicIcon /> : (input.trim() ? <SendIcon /> : <MicIcon />)}
+                    </button>
+                </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -9,11 +9,14 @@ export enum GameStatus {
 }
 
 export type GameMode = 'negotiation' | 'story';
+export type ImageSize = '1K' | '2K' | '4K';
 
 export interface Message {
   id: string;
   sender: 'user' | 'zeze' | 'system'; // Added system for narrator
   text: string;
+  imageUrl?: string; // URL/Base64 of the generated image
+  videoUrl?: string; // URL/Blob of the generated video
 }
 
 export interface GameState {
@@ -26,6 +29,7 @@ export interface GameState {
   // Story Mode Specifics
   storyOptions: string[];
   isStoryLoading: boolean;
+  imageSize: ImageSize;
 }
 
 export interface GeminiResponse {
@@ -33,6 +37,7 @@ export interface GeminiResponse {
   patienceChange: number; // How much patience changed this turn
   newPrice: number;
   gameStatus: GameStatus;
+  imagePrompt?: string; // Optional prompt for image generation
 }
 
 export interface StoryResponse {
@@ -40,6 +45,7 @@ export interface StoryResponse {
   options: string[]; // 2 to 4 choices for the user
   gameOver: boolean;
   endingType?: 'good' | 'bad' | 'funny' | 'death';
+  imagePrompt?: string; // Optional prompt for image generation
 }
 
 export interface GameResult {

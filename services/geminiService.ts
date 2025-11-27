@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { GameState, GeminiResponse, GameStatus, StoryResponse } from "../types";
+import { GameState, GeminiResponse, GameStatus, StoryResponse, ImageSize } from "../types";
 
 // Initialize Gemini Client
 // IMPORTANT: The API key is assumed to be in process.env.API_KEY
@@ -41,6 +40,7 @@ RESPOSTA JSON:
 - patienceChange: -20 a +20.
 - newPrice: O preço atualizado.
 - gameStatus: 'playing', 'won', 'lost', 'prison', 'scammed', 'robbed'.
+- imagePrompt: (Opcional) Uma descrição curta em INGLÊS para gerar uma imagem do momento (ex: "broken iphone screen", "angry thug face", "bundle of cash"). Usa isto APENAS se for visualmente interessante.
 `;
 
 const STORY_SYSTEM_INSTRUCTION = `
@@ -62,7 +62,8 @@ FORMATO JSON OBRIGATÓRIO:
   "narrative": "Descrição da cena + Fala do Zézé.",
   "options": ["Opção A", "Opção B", "Opção C"],
   "gameOver": boolean,
-  "endingType": "good" | "bad" | "funny" | "death" (apenas se gameOver=true)
+  "endingType": "good" | "bad" | "funny" | "death" (apenas se gameOver=true),
+  "imagePrompt": "Descrição visual curta em INGLÊS da cena para gerar uma imagem (Opcional, mas recomendado para novas cenas)."
 }
 `;
 
@@ -95,7 +96,8 @@ export const sendGunaMessage = async (
             text: { type: Type.STRING },
             patienceChange: { type: Type.INTEGER },
             newPrice: { type: Type.INTEGER },
-            gameStatus: { type: Type.STRING, enum: ['playing', 'won', 'lost', 'prison', 'scammed', 'robbed'] }
+            gameStatus: { type: Type.STRING, enum: ['playing', 'won', 'lost', 'prison', 'scammed', 'robbed'] },
+            imagePrompt: { type: Type.STRING, nullable: true }
           },
           required: ['text', 'patienceChange', 'newPrice', 'gameStatus']
         }
@@ -142,7 +144,8 @@ export const generateStoryTurn = async (
             narrative: { type: Type.STRING },
             options: { type: Type.ARRAY, items: { type: Type.STRING } },
             gameOver: { type: Type.BOOLEAN },
-            endingType: { type: Type.STRING, enum: ["good", "bad", "funny", "death"], nullable: true }
+            endingType: { type: Type.STRING, enum: ["good", "bad", "funny", "death"], nullable: true },
+            imagePrompt: { type: Type.STRING, nullable: true }
           },
           required: ['narrative', 'options', 'gameOver']
         }
@@ -163,6 +166,92 @@ export const generateStoryTurn = async (
     };
   }
 };
+
+export const generateZezeImage = async (prompt: string, size: ImageSize): Promise<string | undefined> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1",
+          imageSize: size
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+  } catch (error) {
+    console.error("Image generation error:", error);
+    return undefined;
+  }
+  return undefined;
+};
+
+// Helper for ending images
+export const getEndingImagePrompt = (status: GameStatus): string | undefined => {
+    switch (status) {
+        case GameStatus.WON: return "Happy portuguese thug holding a lot of cash, celebrating, victory, fc porto vibe";
+        case GameStatus.PRISON: return "View from inside a jail cell, iron bars, dark moody lighting, police sirens outside";
+        case GameStatus.SCAMMED: return "An open iphone box containing a red brick inside, street pavement background, scam";
+        case GameStatus.ROBBED: return "First person view of getting punched, stars, blurry vision, angry thug walking away";
+        case GameStatus.LOST: return "Empty bus stop at night, rain, lonely atmosphere, melancholic";
+        default: return undefined;
+    }
+};
+
+export const generateVeoVideo = async (imageBase64: string, mimeType: string): Promise<string | null> => {
+    try {
+        // 1. Check for API Key (Required for Veo)
+        // Access aistudio via explicit casting to avoid declaration conflicts
+        const win = window as any;
+        if (win.aistudio && await win.aistudio.hasSelectedApiKey() === false) {
+            await win.aistudio.openSelectKey();
+        }
+
+        // Create fresh instance after potential key selection
+        const veoAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+        // 2. Start Generation
+        let operation = await veoAi.models.generateVideos({
+            model: 'veo-3.1-fast-generate-preview',
+            image: {
+                imageBytes: imageBase64,
+                mimeType: mimeType,
+            },
+            config: {
+                numberOfVideos: 1,
+                resolution: '720p',
+                aspectRatio: '9:16' // Portrait for mobile feel
+            }
+        });
+
+        // 3. Poll for completion
+        while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s
+            operation = await veoAi.operations.getVideosOperation({ operation: operation });
+        }
+
+        // 4. Get Result
+        const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+        if (!videoUri) return null;
+
+        // 5. Download Video Bytes
+        const videoResponse = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+        const videoBlob = await videoResponse.blob();
+        
+        return URL.createObjectURL(videoBlob);
+
+    } catch (error) {
+        console.error("Veo Video Error:", error);
+        return null;
+    }
+}
+
 
 export const getZezeAudio = async (text: string): Promise<string | undefined> => {
   try {

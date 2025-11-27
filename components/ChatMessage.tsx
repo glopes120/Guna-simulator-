@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Message } from '../types';
 
@@ -51,6 +52,28 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         {isZeze && (
           <div className="text-[13px] font-medium text-[#c07c14] mb-0.5 px-1">
             ~ Zézé da Areosa
+          </div>
+        )}
+
+        {/* Generated Image */}
+        {message.imageUrl && (
+          <div className="mb-2 rounded-lg overflow-hidden border border-[#2a3942] bg-black">
+            <img src={message.imageUrl} alt="Generated Scene" className="w-full h-auto object-cover" />
+          </div>
+        )}
+
+        {/* Generated Video */}
+        {message.videoUrl && (
+          <div className="mb-2 rounded-lg overflow-hidden border border-[#2a3942] bg-black">
+            <video 
+              src={message.videoUrl} 
+              controls 
+              autoPlay 
+              loop 
+              muted 
+              className="w-full h-auto object-cover" 
+              style={{ maxHeight: '300px' }}
+            />
           </div>
         )}
         
