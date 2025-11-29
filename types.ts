@@ -5,7 +5,8 @@ export enum GameStatus {
   LOST = 'lost',     // Zézé foi embora (Paciência 0)
   PRISON = 'prison', // Zézé foi preso (Chamar a bófia)
   SCAMMED = 'scammed', // Comprou caro (> 400€) -> Tijolo
-  ROBBED = 'robbed'   // Agressão física (Paciência 0 + Insultos graves)
+  ROBBED = 'robbed',   // Agressão física (Paciência 0 + Insultos graves)
+  DRAW = "DRAW"
 }
 
 export type GameMode = 'negotiation' | 'story';

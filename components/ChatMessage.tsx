@@ -1,4 +1,6 @@
 
+
+
 import React from 'react';
 import { Message } from '../types';
 
@@ -21,50 +23,47 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   };
 
   return (
-    <div className={`flex w-full mb-2 ${isZeze ? 'justify-start' : 'justify-end'}`}>
+    <div className={`flex w-full mb-3 ${isZeze ? 'justify-start' : 'justify-end'}`}>
       <div 
-        className={`relative max-w-[85%] md:max-w-[65%] px-2 py-1.5 shadow-sm text-[15px] leading-snug
+        className={`relative max-w-[85%] md:max-w-[70%] px-3 py-2 shadow-lg text-[15px] leading-snug font-medium transition-all
           ${isZeze 
-            ? 'bg-[#202c33] text-[#e9edef] rounded-tr-lg rounded-br-lg rounded-bl-lg rounded-tl-none' 
-            : 'bg-[#005c4b] text-[#e9edef] rounded-tl-lg rounded-bl-lg rounded-br-none rounded-tr-lg'}
+            ? 'bg-gradient-to-br from-[#202c33] to-[#1a2326] text-[#e9edef] rounded-tr-xl rounded-br-xl rounded-bl-xl rounded-tl-none border border-[#2a3942]/40 shadow-[0_2px_8px_rgba(0,0,0,0.3)]' 
+            : 'bg-gradient-to-br from-[#005c4b] to-[#004838] text-[#e9edef] rounded-tl-xl rounded-bl-xl rounded-br-xl rounded-tr-none border border-[#00a884]/30 shadow-[0_2px_8px_rgba(0,168,132,0.2)]'}
         `}
-        style={{
-          boxShadow: '0 1px 0.5px rgba(0,0,0,0.13)'
-        }}
       >
-        {/* Tail SVGs */}
+        {/* Tail SVGs with enhanced style */}
         {isZeze && (
-          <span className="absolute top-0 -left-[8px] w-[8px] h-[13px] overflow-hidden">
-            <svg viewBox="0 0 8 13" width="8" height="13" className="fill-[#202c33]">
+          <span className="absolute top-0 -left-[10px] w-[10px] h-[14px] overflow-hidden">
+            <svg viewBox="0 0 8 13" width="10" height="14" className="fill-[#202c33]">
               <path d="M1.533 3.568L8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z"></path>
             </svg>
           </span>
         )}
         {!isZeze && (
-          <span className="absolute top-0 -right-[8px] w-[8px] h-[13px] overflow-hidden">
-            <svg viewBox="0 0 8 13" width="8" height="13" className="fill-[#005c4b]">
+          <span className="absolute top-0 -right-[10px] w-[10px] h-[14px] overflow-hidden">
+            <svg viewBox="0 0 8 13" width="10" height="14" className="fill-[#005c4b]">
               <path d="M6.467 3.568L0 12.193V1h5.188c1.77 1 2.338 2.156 1.279 3.568z"></path>
             </svg>
           </span>
         )}
 
-        {/* Sender Name (Optional - WhatsApp usually hides it in 1-on-1, but useful here) */}
+        {/* Sender Name */}
         {isZeze && (
-          <div className="text-[13px] font-medium text-[#c07c14] mb-0.5 px-1">
-            ~ Zézé da Areosa
+          <div className="text-[12px] font-black text-[#c07c14] mb-1 px-0.5 tracking-wide uppercase">
+            ~ Zézé da Areosa 🎯
           </div>
         )}
 
         {/* Generated Image */}
         {message.imageUrl && (
-          <div className="mb-2 rounded-lg overflow-hidden border border-[#2a3942] bg-black">
-            <img src={message.imageUrl} alt="Generated Scene" className="w-full h-auto object-cover" />
+          <div className="mb-2 rounded-lg overflow-hidden border-2 border-[#2a3942]/60 bg-black shadow-md hover:shadow-lg transition-shadow">
+            <img src={message.imageUrl} alt="Generated Scene" className="w-full h-auto object-cover hover:scale-105 transition-transform duration-300" />
           </div>
         )}
 
         {/* Generated Video */}
         {message.videoUrl && (
-          <div className="mb-2 rounded-lg overflow-hidden border border-[#2a3942] bg-black">
+          <div className="mb-2 rounded-lg overflow-hidden border-2 border-[#2a3942]/60 bg-black shadow-md">
             <video 
               src={message.videoUrl} 
               controls 
@@ -77,13 +76,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
           </div>
         )}
         
-        <div className="px-1 pt-1 pb-4 break-words whitespace-pre-wrap">
+        <div className="px-1 pt-0.5 pb-5 break-words whitespace-pre-wrap text-sm md:text-base">
           {message.text}
         </div>
 
         {/* Timestamp & Checks */}
         <div className="absolute bottom-1 right-2 flex items-end gap-1 select-none">
-          <span className="text-[11px] text-[#8696a0] font-light min-w-fit">
+          <span className="text-[10px] text-[#8696a0] font-light min-w-fit opacity-75">
             {getTime()}
           </span>
           {!isZeze && (
@@ -99,3 +98,4 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
 };
 
 export default ChatMessage;
+

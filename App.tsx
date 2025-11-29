@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { sendGunaMessage, getZezeAudio, generateStoryTurn, generateZezeImage, generateVeoVideo, getEndingImagePrompt } from './services/geminiService';
-import { GameState, GameStatus, Message, GameStatistics, GameResult, GameMode, ImageSize } from './types';
+import { sendGunaMessage, generateStoryTurn } from './services/geminiService';
+import { GameState, GameStatus, Message, GameStatistics, GameResult, ImageSize } from './types';
 import ChatMessage from './components/ChatMessage';
 import PatienceMeter from './components/PatienceMeter';
 import ZezeAvatar from './components/ZezeAvatar';
 import StatsModal from './components/StatsModal';
 import StoryControls from './components/StoryControls';
 import MainMenu from './components/MainMenu';
-import { playAudioData } from './utils/audioUtils';
+// audioUtils functions were unused in this file and removed from imports
 import { loadStats, saveStats, clearStats } from './utils/storageUtils';
 
 // Web Speech API Type Definition
@@ -44,11 +44,6 @@ const VideoIcon = () => (
     <path d="M23 7l-6 5 6 5V7zM15 5H2c-.55 0-1 .45-1 1v12c0 .55.45 1 1 1h13c.55 0 1-.45 1-1V6c0-.55-.45-1-1-1z"></path>
   </svg>
 );
-const PhoneIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" className="fill-white">
-    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 2.33.57 3.57.57 3.57 1.02.24 1.35-.13 2.2 2.2z"></path>
-  </svg>
-);
 const MenuIcon = () => (
   <svg viewBox="0 0 24 24" width="24" height="24" className="fill-white">
     <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path>
@@ -72,6 +67,20 @@ const OPENING_LINES = [
 ];
 
 const getRandomLine = (lines: string[]) => lines[Math.floor(Math.random() * lines.length)];
+
+const getEndingImagePrompt = (status: GameStatus): string | null => {
+  // Provide simple prompts for each possible game ending; return null when no image should be generated.
+  switch (status) {
+    case GameStatus.WON:
+      return "Uma imagem cinematográfica de celebração: pessoa feliz segurando um iPhone 15 Pro Max, iluminação dramática, realista, alta resolução";
+    case GameStatus.LOST:
+      return "Uma imagem dramática de desalento: pessoa desapontada a afastar-se com um ambiente urbano noturno, realista, alta resolução";
+    case GameStatus.DRAW:
+      return "Uma imagem de impasse: duas pessoas afastando-se, expressão neutra, cenário urbano tenso, realista, alta resolução";
+    default:
+      return null;
+  }
+};
 
 export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -133,15 +142,17 @@ export default function App() {
                   }));
                   
                   try {
-                      const imageUrl = await generateZezeImage(prompt, gameState.imageSize);
-                      if (imageUrl) {
-                          setGameState(prev => ({
-                              ...prev,
-                              messages: prev.messages.map(m => 
-                                  m.id === msgId ? { ...m, text: "FIM DE JOGO", imageUrl } : m
-                              )
-                          }));
-                      }
+                        // Image generation disabled - free tier quota exhausted for gemini-3-pro-image
+                        console.log('📸 Imagem final desativada (quota esgotada)');
+                        // const imageUrl = await generateZezeImage(prompt, gameState.imageSize);
+                        // if (imageUrl) {
+                        setGameState(prev => ({
+                          ...prev,
+                          messages: prev.messages.map(m => 
+                            m.id === msgId ? { ...m, text: "FIM DE JOGO" } : m
+                          )
+                        }));
+                        // }
                   } catch (e) {
                       console.error("Ending image failed", e);
                   }
@@ -215,18 +226,9 @@ export default function App() {
   const processImagePrompt = async (messageId: string, imagePrompt: string | undefined, currentSize: ImageSize) => {
     if (!imagePrompt) return;
     
-    // Slight delay to simulate generation
-    try {
-      const imageUrl = await generateZezeImage(imagePrompt, currentSize);
-      if (imageUrl) {
-        setGameState(prev => ({
-          ...prev,
-          messages: prev.messages.map(m => m.id === messageId ? { ...m, imageUrl } : m)
-        }));
-      }
-    } catch (e) {
-      console.error("Failed to generate image", e);
-    }
+    // Image generation disabled - free tier quota exhausted for gemini-3-pro-image
+    console.log('📸 Geração de imagens desativada (quota esgotada)');
+    return;
   };
 
   // ----- NEGOTIATION LOGIC -----
@@ -263,6 +265,7 @@ export default function App() {
 
       // Stats Logic (Simplified for brevity)
       if (response.gameStatus !== GameStatus.PLAYING) {
+         console.log('🎮 JOGO TERMINOU! Status:', response.gameStatus);
          // Update stats logic here...
          const result: GameResult = {
              outcome: response.gameStatus as any,
@@ -289,11 +292,12 @@ export default function App() {
          saveStats(newStats);
       }
 
-      if (isAudioEnabled) {
-        getZezeAudio(response.text).then(audio => {
-           if(audio && audioContextRef.current) playAudioData(audio, audioContextRef.current, 1.2);
-        });
-      }
+      // Audio generation disabled - using text-to-speech removed for performance
+      // if (isAudioEnabled) {
+      //   getZezeAudio(response.text).then(audio => {
+      //      if(audio && audioContextRef.current) playAudioData(audio, audioContextRef.current, 1.2);
+      //   });
+      // }
 
     } catch (e) {
       console.error(e);
@@ -302,8 +306,11 @@ export default function App() {
     }
   };
 
-  // ----- VEO VIDEO LOGIC -----
+  // ----- VEO VIDEO LOGIC DISABLED FOR PERFORMANCE -----
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('📹 Video uploads disabled - Veo video generation removed');
+    return;
+    /*
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -345,6 +352,7 @@ export default function App() {
         console.error("Video upload failed", e);
         setIsGeneratingVideo(false);
     }
+    */
   };
 
   // ----- STORY MODE LOGIC -----
@@ -412,11 +420,12 @@ export default function App() {
 
         processImagePrompt(msgId, storyTurn.imagePrompt, gameState.imageSize);
 
-        if (isAudioEnabled) {
-             getZezeAudio(storyTurn.narrative).then(audio => {
-               if(audio && audioContextRef.current) playAudioData(audio, audioContextRef.current, 1.2);
-            });
-        }
+        // Audio generation disabled for performance
+        // if (isAudioEnabled) {
+        //      getZezeAudio(storyTurn.narrative).then(audio => {
+        //        if(audio && audioContextRef.current) playAudioData(audio, audioContextRef.current, 1.2);
+        //     });
+        // }
 
     } catch (e) {
         setGameState(prev => ({ ...prev, isStoryLoading: false }));
@@ -464,10 +473,14 @@ export default function App() {
 
   // ----- RENDER -----
   return (
-    <div className="flex justify-center items-center h-screen bg-[#000] p-0 md:p-6 font-sans">
+    <div className="flex justify-center items-center h-screen w-screen bg-gradient-to-br from-[#000000] via-[#0b141a] to-[#000000] p-0 md:p-4 lg:p-6 font-sans fixed inset-0">
       <StatsModal stats={stats} isOpen={showStats} onClose={() => setShowStats(false)} onReset={() => setStats(clearStats())} />
 
-      <div className="w-full max-w-[500px] h-full md:h-[90vh] md:max-h-[850px] bg-[#0b141a] md:rounded-[24px] shadow-2xl flex flex-col overflow-hidden relative">
+      {/* Main container - Mobile optimized */}
+      <div className="w-full h-full md:w-full md:h-[90vh] lg:max-w-[500px] lg:max-h-[850px] md:rounded-[28px] bg-[#0b141a] shadow-2xl flex flex-col overflow-hidden relative border-0 md:border md:border-[#2a3942]/30 md:hover:border-[#00a884]/20 md:transition-all md:duration-500">
+        
+        {/* Glow effect on edges (desktop only) */}
+        <div className="hidden md:block absolute inset-0 rounded-[28px] pointer-events-none bg-gradient-to-b from-[#00a884]/10 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity duration-500"></div>
         
         {/* MAIN MENU RENDER */}
         {inMainMenu ? (
@@ -481,82 +494,88 @@ export default function App() {
           <>
             {/* Dropdown Menu */}
             {showMenu && (
-                <div className="absolute top-14 right-4 bg-[#202c33] rounded-xl shadow-xl z-50 border border-[#2a3942] py-2 min-w-[200px] animate-fade-in">
-                    <button onClick={handleBackToMenu} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
-                        <span className="text-xl">🏠</span> Menu Principal
+                <div className="absolute top-14 right-2 md:right-4 bg-gradient-to-br from-[#202c33] to-[#1a2326] rounded-xl shadow-2xl z-50 border border-[#2a3942]/60 py-2 min-w-[220px] md:min-w-[240px] animate-slide-in-right backdrop-blur-subtle max-h-[60vh] overflow-y-auto">
+                    <button onClick={handleBackToMenu} className="w-full text-left px-4 py-3 hover:bg-[#00a884]/10 text-[#e9edef] flex items-center gap-3 transition-colors group text-sm md:text-base">
+                        <span className="text-xl group-hover:scale-125 transition-transform">🏠</span> 
+                        <span className="font-medium">Menu Principal</span>
                     </button>
-                    <button onClick={restartNegotiation} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
-                        <span className="text-xl">🔄</span> Reiniciar Jogo
+                    <button onClick={restartNegotiation} className="w-full text-left px-4 py-3 hover:bg-[#00a884]/10 text-[#e9edef] flex items-center gap-3 transition-colors group text-sm md:text-base">
+                        <span className="text-xl group-hover:scale-125 transition-transform">🔄</span> 
+                        <span className="font-medium">Reiniciar Jogo</span>
                     </button>
-                    <div className="border-t border-[#2a3942] my-1"></div>
+                    <div className="divider-glow my-2"></div>
                     <div className="px-4 py-2 text-xs text-[#8696a0] font-bold uppercase">Qualidade Imagem</div>
                     <div className="flex px-4 gap-2 mb-2">
                         {(['1K', '2K', '4K'] as ImageSize[]).map((size) => (
                           <button 
                             key={size}
                             onClick={() => handleImageSizeChange(size)}
-                            className={`flex-1 py-1 rounded text-xs font-bold border ${gameState.imageSize === size ? 'bg-[#00a884] text-white border-[#00a884]' : 'text-[#8696a0] border-[#8696a0]'}`}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold border-2 transition-all active:scale-95 ${gameState.imageSize === size ? 'bg-gradient-to-r from-[#00a884] to-[#008f6f] text-white border-[#00d9a3] shadow-lg shadow-[#00a884]/30' : 'text-[#8696a0] border-[#2a3942] hover:border-[#00a884]/50'}`}
                           >
                             {size}
                           </button>
                         ))}
                     </div>
-                    <div className="border-t border-[#2a3942] my-1"></div>
-                    <button onClick={() => setShowStats(true)} className="w-full text-left px-4 py-3 hover:bg-[#111b21] text-[#e9edef] flex items-center gap-3">
-                        <span className="text-xl">📊</span> Caderneta
+                    <div className="divider-glow my-2"></div>
+                    <button onClick={() => setShowStats(true)} className="w-full text-left px-4 py-3 hover:bg-[#00a884]/10 text-[#e9edef] flex items-center gap-3 transition-colors group text-sm md:text-base">
+                        <span className="text-xl group-hover:scale-125 transition-transform">📊</span> 
+                        <span className="font-medium">Caderneta</span>
                     </button>
                 </div>
             )}
 
-            {/* Header */}
-            <div className="px-2 py-2 bg-[#202c33] flex justify-between items-center z-20 shrink-0 shadow-sm">
-              <div className="flex items-center gap-2">
-                <button onClick={handleBackToMenu} className="p-1 hover:bg-[#2a3942] rounded-full transition-colors mr-1">
+            {/* Header - Mobile optimized */}
+            <div className="px-2 md:px-3 py-2 md:py-2.5 bg-gradient-to-r from-[#202c33] to-[#1a2326] flex justify-between items-center z-20 shrink-0 shadow-md border-b border-[#2a3942]/40">
+              <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
+                <button onClick={handleBackToMenu} className="p-2 hover:bg-[#2a3942]/60 rounded-full transition-all duration-200 flex-shrink-0">
                     <BackArrowIcon />
                 </button>
-                <div className="flex items-center gap-2 cursor-pointer hover:bg-[#2a3942] p-1 rounded-lg transition-colors" onClick={() => setShowMenu(!showMenu)}>
-                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-600 bg-black">
+                <div className="flex items-center gap-1.5 md:gap-2 cursor-pointer hover:bg-[#2a3942]/40 p-1 md:p-1.5 rounded-lg transition-all duration-200 min-w-0 flex-1 md:flex-none" onClick={() => setShowMenu(!showMenu)}>
+                  <div className="w-10 md:w-11 h-10 md:h-11 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#00a884]/60 bg-gradient-to-br from-slate-700 to-black shadow-lg shadow-[#00a884]/20">
                     <ZezeAvatar patience={gameState.mode === 'story' ? 100 : gameState.patience} isThinking={isLoading || gameState.isStoryLoading} />
                   </div>
-                  <div className="flex flex-col justify-center">
-                    <div className="text-[#e9edef] font-medium text-[16px] leading-tight">
-                      Zézé da Areosa {gameState.mode === 'story' && <span className="text-[#00a884] text-xs font-bold bg-[#0b141a] px-1 rounded ml-1">RPG</span>}
+                  <div className="flex flex-col justify-center min-w-0 flex-1 md:flex-none">
+                    <div className="text-[#e9edef] font-bold text-[13px] md:text-[15px] leading-tight flex items-center gap-1 truncate">
+                      Zézé 
+                      {gameState.mode === 'story' && <span className="text-[#00a884] text-[8px] md:text-[10px] font-black bg-[#00a884]/20 px-1.5 py-0.5 rounded-full border border-[#00a884]/40 flex-shrink-0">RPG</span>}
                     </div>
-                    <div className="text-[#8696a0] text-[12px] truncate max-w-[150px]">
-                      {isLoading || gameState.isStoryLoading ? "a escrever..." : (isGeneratingVideo ? "a ver vídeo..." : "Online")}
+                    <div className="text-[#8696a0] text-[11px] md:text-[12px] truncate font-medium">
+                      {isLoading || gameState.isStoryLoading ? "✍️ a escrever..." : (isGeneratingVideo ? "🎬 a processar..." : "🟢 Online")}
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4 px-2">
-                <button onClick={toggleAudio} className={isAudioEnabled ? "opacity-100" : "opacity-50"}><VideoIcon /></button>
-                <button onClick={() => setShowMenu(!showMenu)}><MenuIcon /></button>
+              <div className="flex items-center gap-2 md:gap-3 px-1 md:px-2 flex-shrink-0">
+                <button onClick={toggleAudio} className={`p-2 rounded-full transition-all duration-200 ${isAudioEnabled ? "bg-[#00a884]/30 text-[#00a884]" : "text-[#8696a0] hover:text-[#00a884]"}`}><VideoIcon /></button>
+                <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-[#2a3942]/60 transition-all duration-200 text-[#e9edef]"><MenuIcon /></button>
               </div>
             </div>
 
             {/* Negotiation Info Bar (Only Negotiation Mode) */}
             {gameState.mode === 'negotiation' && (
-                <div className="bg-[#182229] px-4 py-1 flex justify-center border-b border-[#202c33] z-10">
-                <span className={`text-xs font-bold text-[#8696a0] uppercase flex items-center gap-2 ${isPriceAnimating ? 'animate-price' : ''}`}>
-                    iPhone 15 "Pro Max" • <span className="text-[#e9edef]">{gameState.currentPrice} €</span>
+                <div className="bg-gradient-to-r from-[#182229]/80 to-[#0f1a20]/80 px-3 md:px-4 py-2 flex justify-center border-b border-[#00a884]/20 z-10 backdrop-blur-sm">
+                <span className={`text-[11px] md:text-xs font-black text-[#00a884] uppercase flex items-center gap-1.5 md:gap-2 tracking-wider ${isPriceAnimating ? 'animate-price' : ''}`}>
+                    📱 iPhone 15 • <span className="text-[#00d9a3] font-black text-[12px] md:text-sm drop-shadow-lg">{gameState.currentPrice}€</span>
                 </span>
                 </div>
             )}
 
             {/* Chat Area */}
             <div className="relative flex-1 bg-[#0b141a] overflow-hidden w-full">
-                <div className="absolute inset-0 wa-bg pointer-events-none"></div>
-                <div ref={scrollRef} className="relative h-full overflow-y-auto p-4 space-y-1">
+                <div className="absolute inset-0 wa-bg pointer-events-none opacity-40"></div>
+                <div ref={scrollRef} className="relative h-full overflow-y-auto p-3 md:p-4 space-y-2">
                   {gameState.mode === 'negotiation' && <PatienceMeter level={gameState.patience} />}
-                  {gameState.messages.map((msg) => (
-                    <ChatMessage key={msg.id} message={msg} />
+                  {gameState.messages.map((msg, idx) => (
+                    <div key={msg.id} className={idx === gameState.messages.length - 1 ? 'animate-slide-in-left' : ''}>
+                      <ChatMessage message={msg} />
+                    </div>
                   ))}
                   
                   {/* Negotiation End Cards */}
                   {gameState.mode === 'negotiation' && gameState.status !== GameStatus.PLAYING && (
-                      <div className="flex justify-center mt-4">
-                          <button onClick={restartNegotiation} className="bg-[#202c33] text-[#00a884] px-6 py-2 rounded-full border border-[#2a3942] hover:bg-[#2a3942] font-bold">
-                              JOGAR NOVAMENTE
+                      <div className="flex justify-center mt-6 pt-4 animate-bounce-subtle">
+                          <button onClick={restartNegotiation} className="bg-gradient-to-r from-[#00a884] to-[#008f6f] text-white px-6 md:px-8 py-2.5 md:py-3 rounded-full border-2 border-[#00d9a3] hover:shadow-[0_8px_20px_rgba(0,168,132,0.4)] font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg text-sm md:text-base">
+                              🎮 JOGAR NOVAMENTE
                           </button>
                       </div>
                   )}
@@ -575,14 +594,14 @@ export default function App() {
                     onRestart={startStoryMode}
                 />
             ) : (
-                <div className="bg-[#202c33] p-2 flex items-end gap-2 shrink-0 z-20 relative">
+                <div className="bg-gradient-to-t from-[#202c33] to-[#1a2326] p-2 md:p-3 flex items-end gap-1.5 md:gap-2 shrink-0 z-20 relative shadow-2xl border-t border-[#2a3942]/40">
                     {speechError && (
-                        <div className="absolute -top-12 right-2 bg-red-600/95 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-bounce z-50">
-                            {speechError}
+                        <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-red-600/95 text-white text-xs font-bold px-3 md:px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-bounce z-50 whitespace-nowrap border border-red-500/50">
+                            ⚠️ {speechError}
                         </div>
                     )}
-                    <div className="flex-1 bg-[#2a3942] rounded-[24px] px-3 py-2 flex items-center gap-2 min-h-[42px]">
-                        <button className="p-1 hover:bg-[#374248] rounded-full transition-colors hidden md:block"><SmileyIcon /></button>
+                    <div className="flex-1 bg-gradient-to-r from-[#2a3942]/80 to-[#202c33]/80 rounded-[20px] md:rounded-[24px] px-3 md:px-4 py-2 md:py-2.5 flex items-center gap-1.5 md:gap-2 min-h-[42px] md:min-h-[44px] border border-[#2a3942]/50 backdrop-blur-sm hover:border-[#00a884]/30 transition-colors">
+                        <button className="p-1.5 hover:bg-[#374248]/60 rounded-full transition-colors hidden md:block flex-shrink-0"><SmileyIcon /></button>
                         <input
                             ref={inputRef}
                             type="text"
@@ -590,8 +609,8 @@ export default function App() {
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleMainButtonClick()}
                             disabled={gameState.status !== GameStatus.PLAYING || isLoading}
-                            placeholder={isListening ? "A ouvir..." : (gameState.status === GameStatus.PLAYING ? "Mensagem" : "Bloqueado")}
-                            className={`bg-transparent text-[#e9edef] placeholder-[#8696a0] text-[15px] flex-1 outline-none w-full ${isListening ? 'animate-pulse' : ''}`}
+                            placeholder={isListening ? "🎤 A ouvir..." : (gameState.status === GameStatus.PLAYING ? "Mensagem" : "Bloqueado")}
+                            className={`bg-transparent text-[#e9edef] placeholder-[#8696a0] text-[14px] md:text-[15px] flex-1 outline-none w-full font-medium ${isListening ? 'animate-pulse text-[#00a884]' : ''}`}
                         />
                         {/* Hidden File Input for Video Generation */}
                         <input 
@@ -603,7 +622,7 @@ export default function App() {
                         />
                         <button 
                           onClick={() => fileInputRef.current?.click()} 
-                          className={`p-1 hover:bg-[#374248] rounded-full transition-colors rotate-45 ${isGeneratingVideo ? 'animate-spin' : ''}`}
+                          className={`p-1.5 hover:bg-[#374248]/60 rounded-full transition-all duration-200 flex-shrink-0 ${isGeneratingVideo ? 'animate-spin-smooth text-[#00a884]' : ''}`}
                           disabled={isGeneratingVideo}
                         >
                           <ClipIcon />
@@ -611,7 +630,7 @@ export default function App() {
                     </div>
                     
                     {gameState.status === GameStatus.PLAYING && input.length === 0 && !isListening && (
-                        <button onClick={() => handleNegotiationMessage(`ACEITO O NEGÓCIO POR ${gameState.currentPrice} EUROS!`)} className="w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-md bg-[#202c33] hover:bg-[#374248] border border-[#2a3942] flex-shrink-0">
+                        <button onClick={() => handleNegotiationMessage(`ACEITO O NEGÓCIO POR ${gameState.currentPrice} EUROS!`)} className="w-10 md:w-11 h-10 md:h-11 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-r from-[#008f6f] to-[#006b52] hover:from-[#00a884] hover:to-[#008f6f] border-2 border-[#00d9a3]/50 hover:border-[#00d9a3] flex-shrink-0 transition-all active:scale-90 md:hover-lift touch-manipulation">
                             <HandshakeIcon />
                         </button>
                     )}
@@ -619,7 +638,7 @@ export default function App() {
                     <button 
                         onClick={handleMainButtonClick}
                         disabled={isLoading || gameState.status !== GameStatus.PLAYING}
-                        className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-md transition-all flex-shrink-0 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#00a884] hover:bg-[#008f6f]'}`}
+                        className={`w-10 md:w-11 h-10 md:h-11 rounded-full flex items-center justify-center shadow-lg transition-all flex-shrink-0 active:scale-90 touch-manipulation border-2 ${isListening ? 'bg-red-600/90 border-red-500 animate-pulse shadow-lg shadow-red-600/40' : 'bg-gradient-to-br from-[#00a884] to-[#008f6f] hover:from-[#00d9a3] hover:to-[#00a884] border-[#00d9a3]/50 hover:border-[#00d9a3] md:hover:shadow-lg md:hover:shadow-[#00a884]/40'}`}
                     >
                         {isListening ? <MicIcon /> : (input.trim() ? <SendIcon /> : <MicIcon />)}
                     </button>
