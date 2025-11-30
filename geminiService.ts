@@ -74,7 +74,7 @@ export const sendGunaMessage = async (
     const isRespectful = /mano|sócio|chefe|rei|patrão|obrigado/i.test(userMessage);
     const mentions_police = /polícia|bófia|112|gnr|psp|guardas|xibo/i.test(userMessage);
     const mentions_rivals = /benfica|sporting|lisboa|mouros|lamp|lagarto/i.test(userMessage);
-    const mentions_fcp = /porto|dragaum|conceição|invicta|azul/i.test(userMessage);
+    const mentions_fcp = /porto|dragão|conceição|invicta|azul/i.test(userMessage);
 
     // 2. Eventos Aleatórios (O Zézé distrai-se no WhatsApp)
     const randomEvents = [
